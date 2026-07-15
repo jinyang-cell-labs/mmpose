@@ -9,3 +9,9 @@ demo/MMPose_Tutorial.ipynb
 *.pyc
 work_dirs
 vis_results
+# robot_model: only the URDF and merged visual meshes are needed
+robot_model/robot.xml
+robot_model/assets/*.part
+robot_model/assets/*.scad
+robot_model/assets/*.stl
+robot_model/assets/merged/*_collision.stl
