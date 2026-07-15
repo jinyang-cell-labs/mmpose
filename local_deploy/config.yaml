@@ -1,0 +1,53 @@
+# Configuration for the local body-pose deployment (local_deploy/app.py).
+# This file is bind-mounted into the container by bootstrap.sh, so you can
+# edit it and restart the container without rebuilding the image.
+
+camera:
+  # Video source. Either a V4L2 device path (e.g. /dev/video0), a plain
+  # index ("0" also means /dev/video0), or a path to a video file.
+  # bootstrap.sh reads this value to pass the device / file into the container.
+  path: /dev/video0
+  # Optional capture resolution. Comment out to use the camera default.
+  width: 640
+  height: 480
+
+# 'auto' picks cuda:0 when available, otherwise cpu. Force with 'cpu'/'cuda:0'.
+device: auto
+
+models:
+  # Person detector (mmdet)
+  det_config: demo/mmdetection_cfg/rtmdet_m_640-8xb32_coco-person.py
+  det_checkpoint: https://download.openmmlab.com/mmpose/v1/projects/rtmpose/rtmdet_m_8xb32-100e_coco-obj365-person-235e8209.pth
+  # 2D top-down body pose estimator (17 COCO keypoints)
+  pose2d_config: configs/body_2d_keypoint/rtmpose/body8/rtmpose-m_8xb256-420e_body8-256x192.py
+  pose2d_checkpoint: https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/rtmpose-m_simcc-body7_pt-body7_420e-256x192-e48f03d0_20230504.pth
+  # 2D -> 3D pose lifter (H36M 17 keypoints). Swap for MotionBERT if desired:
+  #   configs/body_3d_keypoint/motionbert/h36m/motionbert_dstformer-ft-243frm_8xb32-120e_h36m.py
+  #   https://download.openmmlab.com/mmpose/v1/body_3d_keypoint/pose_lift/h36m/motionbert_ft_h36m-d80af323_20230531.pth
+  pose3d_config: configs/body_3d_keypoint/video_pose_lift/h36m/video-pose-lift_tcn-243frm-supv-cpn-ft_8xb128-200e_h36m.py
+  pose3d_checkpoint: https://download.openmmlab.com/mmpose/body3d/videopose/videopose_h36m_243frames_fullconv_supervised_cpn_ft-88f5abbb_20210527.pth
+
+detection:
+  cat_id: 0        # 'person' class id in COCO
+  bbox_thr: 0.5    # min detection score for a person box
+
+tracking:
+  use_oks: false   # false = IoU-based tracking, true = OKS-based
+  thr: 0.3
+
+lifting:
+  # Scale/move the bbox and 2D pose to the dataset average before lifting.
+  # Helps when the person is small in the frame.
+  norm_pose_2d: true
+  # Shift each 3D pose so its lowest joint sits at z=0 (the lifter predicts
+  # root-relative coordinates, not global position).
+  rebase_keypoint: true
+
+kpt_thr: 0.3       # min keypoint score to draw
+
+rerun:
+  app_id: mmpose_body3d
+  web_port: 9090   # Rerun web viewer (HTTP); keep in sync with bootstrap.sh -p flags
+  ws_port: 9877    # Rerun data websocket
+  jpeg_quality: 75 # compression for the streamed video frames
+  memory_limit: 1GB

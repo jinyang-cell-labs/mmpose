@@ -1,0 +1,11 @@
+.git
+docs
+tests
+projects
+resources
+demo/resources
+demo/MMPose_Tutorial.ipynb
+**/__pycache__
+*.pyc
+work_dirs
+vis_results
