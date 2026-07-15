@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "05a1ca35a1404e3595f69331",
+    "documentMicroversion": "40bedf9f7351f5fdfdac91d9",
+    "documentVersion": "e0cc1ce6e3d215482b980ba7",
+    "elementId": "990dd3e7915ca3a0d46633af",
+    "fullConfiguration": "default",
+    "id": "M/7nMcwLV2rlFu7Vj",
+    "isStandardContent": false,
+    "name": "bearing_holder <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

@@ -28,6 +28,9 @@ from mmpose.apis import (_track_by_iou, _track_by_oks,
 from mmpose.structures import PoseDataSample
 from mmpose.utils import adapt_mmdet_pipeline
 
+from retarget import (ArmRetargeter, URDFRobot,
+                      self_test as retarget_self_test)
+
 # Fallback if the lifter checkpoint carries no skeleton definition (H36M, 17 kpts)
 H36M_SKELETON = [(0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (5, 6), (0, 7),
                  (7, 8), (8, 9), (9, 10), (8, 11), (11, 12), (12, 13),
@@ -281,6 +284,74 @@ class Body3DPipeline:
         return pose_est_results, pose_lift_results
 
 
+class RobotViz:
+    """Drive the URDF robot in the Rerun 3D view via forward kinematics.
+
+    Each link's visual STL is logged once (static); per frame only the link
+    transforms are updated.
+    """
+
+    def __init__(self, robot, robot_cfg):
+        self.robot = robot
+        yaw = np.deg2rad(float(robot_cfg.get('yaw_deg', 0.0)))
+        cy, sy = np.cos(yaw), np.sin(yaw)
+        self.base = np.eye(4)
+        self.base[:3, :3] = np.array([[cy, -sy, 0], [sy, cy, 0], [0, 0, 1]])
+        self.base[:3, 3] = robot_cfg.get('offset', [0.0, -0.9, 0.95])
+
+        for link, (mesh_path, t_vis) in robot.visuals.items():
+            rr.log(
+                f'pose3d/robot/{link}/mesh',
+                rr.Asset3D(path=mesh_path),
+                static=True)
+            rr.log(
+                f'pose3d/robot/{link}/mesh',
+                rr.Transform3D(
+                    translation=t_vis[:3, 3], mat3x3=t_vis[:3, :3]),
+                static=True)
+        self.update({})  # show the zero pose until the first person appears
+
+    def update(self, joint_angles):
+        poses = self.robot.fk(joint_angles)
+        for link in self.robot.visuals:
+            t = self.base @ poses[link]
+            rr.log(
+                f'pose3d/robot/{link}',
+                rr.Transform3D(translation=t[:3, 3], mat3x3=t[:3, :3]))
+
+
+def build_robot(cfg, lifting_enabled):
+    """Returns (RobotViz, ArmRetargeter) or (None, None) if disabled."""
+    robot_cfg = cfg.get('robot', {})
+    if not robot_cfg.get('enabled', False):
+        return None, None
+    if not lifting_enabled:
+        print('robot.enabled is set but lifting is disabled: '
+              'no 3D skeleton to retarget from, robot viz is off.')
+        return None, None
+    robot = URDFRobot(robot_cfg.get('urdf', 'robot_model/robot.urdf'))
+    retargeter = ArmRetargeter(
+        robot,
+        smoothing=robot_cfg.get('smoothing', 0.35),
+        mirror=robot_cfg.get('mirror', False))
+    print(f'Robot "{robot.name}": {len(robot.visuals)} visual links, '
+          f'driving {2 * 4} arm joints')
+    return RobotViz(robot, robot_cfg), retargeter
+
+
+def log_robot(robot_viz, retargeter, pose_lift_results):
+    if not pose_lift_results:
+        return
+    kpts = np.asarray(pose_lift_results[0].pred_instances.keypoints)[0]
+    angles = retargeter.update(kpts)
+    if not angles:
+        return
+    robot_viz.update(angles)
+    for name, q in angles.items():
+        joint, side = name.rsplit('_', 1)
+        rr.log(f'angles/{side}/{joint}', rr.Scalar(q))
+
+
 def _track_color(res):
     track_id = int(res.get('track_id', 0))
     return TRACK_PALETTE[track_id % len(TRACK_PALETTE)]
@@ -378,6 +449,7 @@ def run_stream(cap, pipeline, cfg):
         skeleton_3d = pipeline.pose_lifter.dataset_meta.get(
             'skeleton_links') or H36M_SKELETON
         rr.log('pose3d', rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+    robot_viz, retargeter = build_robot(cfg, pipeline.lifting_enabled)
 
     frame_idx = 0
     t0 = time.monotonic()
@@ -395,6 +467,8 @@ def run_stream(cap, pipeline, cfg):
         log_2d(frame, pose2d, skeleton_2d, kpt_thr, jpeg_quality)
         if pipeline.lifting_enabled:
             log_3d(pose3d, skeleton_3d, kpt_thr)
+        if robot_viz is not None:
+            log_robot(robot_viz, retargeter, pose3d)
 
         fps_n += 1
         now = time.monotonic()
@@ -414,6 +488,9 @@ def smoke_test(cfg, device):
     if pipeline.lifting_enabled:
         skeleton_3d = pipeline.pose_lifter.dataset_meta.get(
             'skeleton_links') or H36M_SKELETON
+    robot_viz, retargeter = build_robot(cfg, pipeline.lifting_enabled)
+    if robot_viz is not None:
+        retarget_self_test()
     rng = np.random.default_rng(0)
     for idx in range(3):
         frame = rng.integers(0, 255, (480, 640, 3), dtype=np.uint8)
@@ -422,8 +499,11 @@ def smoke_test(cfg, device):
         log_2d(frame, pose2d, skeleton_2d, 0.3, 75)
         if pipeline.lifting_enabled:
             log_3d(pose3d, skeleton_3d, 0.3)
+        if robot_viz is not None:
+            log_robot(robot_viz, retargeter, pose3d)
         print(f'smoke test frame {idx}: {len(pose2d)} detection(s)')
-    print(f'smoke test OK (lifting {"on" if pipeline.lifting_enabled else "off"})')
+    print(f'smoke test OK (lifting {"on" if pipeline.lifting_enabled else "off"}, '
+          f'robot {"on" if robot_viz is not None else "off"})')
 
 
 def main():
@@ -440,9 +520,20 @@ def main():
     web_port = int(rerun_cfg.get('web_port', 9090))
     ws_port = int(rerun_cfg.get('ws_port', 9877))
     rr.init(rerun_cfg.get('app_id', 'mmpose_body3d'))
+    lifting_on = cfg.get('lifting', {}).get('enabled', True)
+    robot_on = lifting_on and cfg.get('robot', {}).get('enabled', False)
     views = [rrb.Spatial2DView(origin='video', name='Camera + 2D keypoints')]
-    if cfg.get('lifting', {}).get('enabled', True):
-        views.append(rrb.Spatial3DView(origin='pose3d', name='Lifted 3D pose'))
+    if lifting_on:
+        view_3d = rrb.Spatial3DView(
+            origin='pose3d', name='Lifted 3D pose + robot')
+        if robot_on:
+            views.append(
+                rrb.Vertical(
+                    view_3d,
+                    rrb.TimeSeriesView(origin='angles', name='Joint angles'),
+                    row_shares=[3, 1]))
+        else:
+            views.append(view_3d)
     blueprint = rrb.Blueprint(
         rrb.Horizontal(*views),
         collapse_panels=True,

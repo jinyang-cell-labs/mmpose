@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "3e0264368304a21e1f7bad96",
+    "documentMicroversion": "2c15f4806aff9bb8a04d0fdd",
+    "documentVersion": "ae9cb0f0173f3fdc1d59d9e6",
+    "elementId": "5c4202182951cc034eeb22e7",
+    "fullConfiguration": "default",
+    "id": "MV2MM9SpzMg08bA1W",
+    "isStandardContent": false,
+    "name": "hip_roll_housing_top_left <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

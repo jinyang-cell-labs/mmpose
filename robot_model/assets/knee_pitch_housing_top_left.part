@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "2ef971d41daf65cb078f7cf9",
+    "documentMicroversion": "02cc243590b32673ee965a2a",
+    "documentVersion": "d2627b285cbc5471a791cde3",
+    "elementId": "4d59d95ff584c4a0358d7b65",
+    "fullConfiguration": "default",
+    "id": "MSDTu0bbNwGeVqjJz",
+    "isStandardContent": false,
+    "name": "knee_pitch_housing_top_left <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

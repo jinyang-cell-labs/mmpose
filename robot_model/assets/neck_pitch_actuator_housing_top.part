@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "1e7fbc1bb812e270e0a882ab",
+    "documentMicroversion": "82722c56a7b5cd5924fa8e10",
+    "documentVersion": "b2e9a4f472fba33a1ca54041",
+    "elementId": "56aefbebe7d0c0bb6460810c",
+    "fullConfiguration": "default",
+    "id": "MCQRDvjy720bL9a57",
+    "isStandardContent": false,
+    "name": "neck_pitch_actuator_housing_top <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

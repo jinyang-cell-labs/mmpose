@@ -60,6 +60,22 @@ lifting:
 
 kpt_thr: 0.3       # min keypoint score to draw
 
+robot:
+  # Retarget the lifted 3D pose to the humanoid's arms (shoulder
+  # pitch/roll/yaw + elbow pitch per side) and show the robot in the 3D
+  # view, plus joint-angle time series. Requires lifting.enabled: true.
+  enabled: true
+  urdf: robot_model/robot.urdf
+  # Placement in the 3D view [x, y, z], next to the human skeleton.
+  # z=0.95 puts the feet on the ground plane.
+  offset: [0.0, -0.9, 0.95]
+  yaw_deg: 0        # rotate the robot about vertical
+  # EMA smoothing for joint angles: 1 = raw (jittery), lower = smoother
+  smoothing: 0.35
+  # If the robot's left arm follows your right arm (webcam mirroring),
+  # set true to swap sides.
+  mirror: false
+
 rerun:
   app_id: mmpose_body3d
   web_port: 9090   # Rerun web viewer (HTTP); keep in sync with bootstrap.sh -p flags

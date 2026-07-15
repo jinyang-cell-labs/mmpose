@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "bc61e41746153ab03768e3e3",
+    "documentMicroversion": "7fa886db0cc02b4db525b789",
+    "documentVersion": "1d506f523dda39bc41da9fcb",
+    "elementId": "a6dd3e7babaccdadffeeb2d0",
+    "fullConfiguration": "default",
+    "id": "Mw80na1nDzj2NypEG",
+    "isStandardContent": false,
+    "name": "actuator_housing_yaw_top <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "d927ae0ef61cf4f8e0cb6888",
+    "documentMicroversion": "1e0652722db6102fbaa33a0e",
+    "documentVersion": "29ef528b2673e8a356343acf",
+    "elementId": "9e2b3e3229784034cc82fdb6",
+    "fullConfiguration": "default",
+    "id": "MBu9m4FAX1X+wINos",
+    "isStandardContent": false,
+    "name": "battery_pack_front_cover <5>",
+    "partId": "JFT",
+    "suppressed": false,
+    "type": "Part"
+}

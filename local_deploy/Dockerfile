@@ -39,6 +39,8 @@ COPY configs ./configs
 COPY demo/mmdetection_cfg ./demo/mmdetection_cfg
 RUN pip install -e . --no-deps
 
+# humanoid model for arm retargeting (visual meshes only, see .dockerignore)
+COPY robot_model ./robot_model
 COPY local_deploy ./local_deploy
 
 # Rerun web viewer (HTTP) + websocket data stream

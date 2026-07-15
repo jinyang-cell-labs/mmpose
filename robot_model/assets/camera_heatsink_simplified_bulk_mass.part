@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "2b82f784a66b3cc185731bd3",
+    "documentMicroversion": "f429b13eab5d38e7759effc7",
+    "documentVersion": "013977f7eb532acf5b4963d2",
+    "elementId": "cecbe19995ee2d723e74249a",
+    "fullConfiguration": "default",
+    "id": "MIyl6aQWGo5DZDxgz",
+    "isStandardContent": false,
+    "name": "camera_heatsink_simplified_bulk_mass <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "9d0658a72b9f12c9f6ddc1dc",
+    "documentMicroversion": "6152739db894e2958674431c",
+    "documentVersion": "ef5efb1ec636027d518ba43f",
+    "elementId": "315944343ab5154bdc0badca",
+    "fullConfiguration": "default",
+    "id": "MiqKejh49e1ETIxeg",
+    "isStandardContent": false,
+    "name": "shoulder_pitch_actuator_housing_top <2>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "f30d2df070ecd4d0dffd0564",
+    "documentMicroversion": "c45489098c9c82ebbf52195f",
+    "documentVersion": "fb25803744a132b0703e0b51",
+    "elementId": "bd83fc0e5f3c12bd25e81e49",
+    "fullConfiguration": "default",
+    "id": "M4SkZyZZ5n8mJ/EAt",
+    "isStandardContent": false,
+    "name": "forearm_actuator_housing_cover <1>",
+    "partId": "JFH",
+    "suppressed": false,
+    "type": "Part"
+}

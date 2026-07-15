@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "96b26bba7bf4f4bdeefae5bc",
+    "documentMicroversion": "4c657b34f7cc792e29a594b6",
+    "documentVersion": "206c3e6aad1caa521df6150c",
+    "elementId": "f2831f74031ad3ab2de34e41",
+    "fullConfiguration": "default",
+    "id": "M73JvlI+vn+q6XRss",
+    "isStandardContent": false,
+    "name": "wrist_yaw_structure <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

@@ -67,6 +67,10 @@ not a rebuild**.
 | `lifting.norm_pose_2d` | true | Normalize bbox/pose to dataset stats before lifting (helps small/far people). |
 | `lifting.rebase_keypoint` | true | Put the lowest joint of each 3D pose at z = 0 (the lifter predicts root-relative coordinates, not global position). |
 | `kpt_thr` | 0.3 | Min keypoint score to draw. |
+| `robot.enabled` | true | Retarget the lifted 3D pose to the humanoid arms (`robot_model/robot.urdf`) and render the robot next to the skeleton, with joint-angle plots. Needs `lifting.enabled`. |
+| `robot.smoothing` | 0.35 | EMA factor for the joint angles (1 = raw). |
+| `robot.mirror` | false | Swap left/right arms if webcam mirroring makes the robot follow the wrong side. |
+| `robot.offset` / `robot.yaw_deg` | `[0,-0.9,0.95]` / 0 | Robot placement in the 3D view. |
 | `rerun.web_port` / `rerun.ws_port` | 9090 / 9877 | Viewer HTTP port / data websocket port (bootstrap publishes both). |
 
 ### Using a different camera
@@ -100,6 +104,23 @@ docker run --rm mmpose-body3d-rerun:latest \
 ```
 
 This runs the full detector → 2D → 3D pipeline on synthetic frames and exits.
+
+## Robot arm retargeting
+
+With `robot.enabled: true` the lifted H36M skeleton drives the humanoid in
+`robot_model/robot.urdf`: per arm, **shoulder pitch / roll / yaw + elbow
+pitch** are computed analytically from the upper-arm and forearm directions
+expressed in a torso frame (up = pelvis→thorax, left = right→left shoulder),
+using the robot's convention (zero pose = arms hanging, pitch about Y, roll
+about X, yaw about the humerus axis, elbow about Y). Angles are clamped to
+the URDF limits, smoothed with an EMA, and the shoulder yaw is held when the
+elbow is near-straight (it is geometrically unobservable then). The robot is
+rendered by forward kinematics in the same 3D view as the skeleton
+(`retarget.py`, self-tested against synthetic poses — run
+`python local_deploy/retarget.py` to check). Wrist/leg/head joints stay at
+zero. Note the URDF's true joint axes are slightly tilted from the nominal
+pitch/roll/yaw axes (actuator packaging), so the mesh pose can deviate a few
+degrees from the human pose.
 
 ## Notes & troubleshooting
 

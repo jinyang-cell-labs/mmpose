@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "96b26bba7bf4f4bdeefae5bc",
+    "documentMicroversion": "7c3178656ea51d5e0021808e",
+    "documentVersion": "ab30d2e5cd2c82d31c196e8b",
+    "elementId": "f2831f74031ad3ab2de34e41",
+    "fullConfiguration": "default",
+    "id": "M73JvlI+vn+q6XRss",
+    "isStandardContent": false,
+    "name": "wrist_roll_structure <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

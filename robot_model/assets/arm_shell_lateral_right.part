@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "e2a81f4cc6d3aed4cda74d39",
+    "documentMicroversion": "379ee2d3e73d04b3e4ecadf1",
+    "documentVersion": "121bf3d9aa188a825632d7db",
+    "elementId": "e0d90fb84e3d2cf55ed14fd2",
+    "fullConfiguration": "default",
+    "id": "M7t7j7lnmE7iUWL18",
+    "isStandardContent": false,
+    "name": "arm_shell_lateral_right <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

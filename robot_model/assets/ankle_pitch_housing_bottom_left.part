@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "bf16cf45d2beff1b732c26cf",
+    "documentMicroversion": "c0983ab5c245e88cefdbf085",
+    "documentVersion": "d38f7749cae12024f14577cc",
+    "elementId": "5fc2d3686f6401b9c8c9b58a",
+    "fullConfiguration": "default",
+    "id": "MZnRCzgaEnGcSfZiP",
+    "isStandardContent": false,
+    "name": "ankle_pitch_housing_bottom_left <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

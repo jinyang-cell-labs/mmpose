@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "1ec25d0d2c3ab75071821a0c",
+    "documentMicroversion": "47358078517e7b7ea2a11a2c",
+    "documentVersion": "5d7f254b8eb42a863a6ee212",
+    "elementId": "ac74dee1d16c9b6b1ff978cf",
+    "fullConfiguration": "default",
+    "id": "M5w+CzuRoQtdJsGxs",
+    "isStandardContent": false,
+    "name": "wrist_dual_driver_pcb_simplified <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}

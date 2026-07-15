@@ -1,0 +1,14 @@
+{
+    "configuration": "default",
+    "documentId": "79524bf5340f73bfb65d5bb7",
+    "documentMicroversion": "3862d1ae282459e4db2468f9",
+    "documentVersion": "de974f2b792f16d3d87e441e",
+    "elementId": "e45c7c907958d247ed803d38",
+    "fullConfiguration": "default",
+    "id": "M5dWMXEChM8D7eEFU",
+    "isStandardContent": false,
+    "name": "shoulder_pitch_arm_right <1>",
+    "partId": "JFD",
+    "suppressed": false,
+    "type": "Part"
+}
