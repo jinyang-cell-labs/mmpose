@@ -10,6 +10,12 @@ camera:
   # Optional capture resolution. Comment out to use the camera default.
   width: 640
   height: 480
+  # Pixel format (FOURCC). MJPG is strongly recommended: many UVC cameras
+  # (e.g. Arducam OV9782) are capped at ~10 FPS in the YUYV default.
+  # Set to '' to keep the driver default. Ignored for video files.
+  fourcc: MJPG
+  # Requested frame rate (the driver picks the nearest supported one).
+  fps: 30
 
 # 'auto' picks cuda:0 when available, otherwise cpu. Force with 'cpu'/'cuda:0'.
 device: auto
@@ -30,12 +36,21 @@ models:
 detection:
   cat_id: 0        # 'person' class id in COCO
   bbox_thr: 0.5    # min detection score for a person box
+  # Track only one person: the biggest in the frame. Background people are
+  # discarded right after detection, so they never reach the 2D stage or
+  # pollute the 2D->3D lifting history. Sticky: the selection only switches
+  # to another person when they are clearly bigger.
+  single_person: true
 
 tracking:
   use_oks: false   # false = IoU-based tracking, true = OKS-based
   thr: 0.3
 
 lifting:
+  # Master switch for the 3D stage. false = skip pose lifting entirely
+  # (the lifter model is not even loaded): only the 2D overlay is shown,
+  # which is faster and uses less GPU memory.
+  enabled: true
   # Scale/move the bbox and 2D pose to the dataset average before lifting.
   # Helps when the person is small in the frame.
   norm_pose_2d: true

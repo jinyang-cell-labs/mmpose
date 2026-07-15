@@ -61,7 +61,9 @@ not a rebuild**.
 | `device` | `auto` | `auto` = CUDA if available, else CPU. Can force `cpu` or `cuda:0`. |
 | `models.*` | RTMDet-m / RTMPose-m / VideoPose3D | Config + checkpoint (URL or path) for each stage. |
 | `detection.bbox_thr` | 0.5 | Min person-detection score. |
+| `detection.single_person` | true | Keep only the biggest person in frame (with hysteresis so the choice doesn't flip between similar-sized people). Background people are dropped before the 2D stage, so they cost nothing and never pollute the 3D lifting history. Set `false` for multi-person. |
 | `tracking.use_oks` | false | Track people across frames by IoU (false) or OKS (true). Tracking feeds the per-person 2D sequence into the lifter. |
+| `lifting.enabled` | true | Set to `false` to skip the 3D lifting stage entirely (the lifter model is not loaded): faster, less GPU memory, and the viewer shows only the 2D overlay. |
 | `lifting.norm_pose_2d` | true | Normalize bbox/pose to dataset stats before lifting (helps small/far people). |
 | `lifting.rebase_keypoint` | true | Put the lowest joint of each 3D pose at z = 0 (the lifter predicts root-relative coordinates, not global position). |
 | `kpt_thr` | 0.3 | Min keypoint score to draw. |

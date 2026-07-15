@@ -70,10 +70,25 @@ def open_capture(cam_cfg):
             f'Could not open video source {src!r}. If it is a camera, make '
             'sure the device is passed into the container (see bootstrap.sh) '
             'and not in use by another application.')
+    # Force the pixel format BEFORE size/fps: many UVC cameras (e.g. Arducam
+    # OV9782) only reach their full frame rate in MJPG, while OpenCV's V4L2
+    # backend defaults to YUYV, which may be capped as low as 10 FPS.
+    fourcc = str(cam_cfg.get('fourcc', 'MJPG'))
+    if fourcc and len(fourcc) == 4:
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*fourcc))
     if cam_cfg.get('width'):
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, int(cam_cfg['width']))
     if cam_cfg.get('height'):
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, int(cam_cfg['height']))
+    if cam_cfg.get('fps'):
+        cap.set(cv2.CAP_PROP_FPS, float(cam_cfg['fps']))
+    # keep at most one buffered frame so the stream stays live (low latency)
+    # even when inference is slower than the camera frame rate
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+    print(f'Capture negotiated: {w:.0f}x{h:.0f} @ '
+          f'{cap.get(cv2.CAP_PROP_FPS):.0f} FPS')
     return cap
 
 
@@ -94,36 +109,72 @@ class Body3DPipeline:
             models['pose2d_config'],
             models['pose2d_checkpoint'],
             device=device)
-        self.pose_lifter = init_model(
-            models['pose3d_config'],
-            models['pose3d_checkpoint'],
-            device=device)
+
+        lift_cfg = cfg.get('lifting', {})
+        self.lifting_enabled = bool(lift_cfg.get('enabled', True))
+        self.pose_lifter = None
+        if self.lifting_enabled:
+            self.pose_lifter = init_model(
+                models['pose3d_config'],
+                models['pose3d_checkpoint'],
+                device=device)
 
         det_cfg = cfg.get('detection', {})
         self.det_cat_id = int(det_cfg.get('cat_id', 0))
         self.bbox_thr = float(det_cfg.get('bbox_thr', 0.5))
+        self.single_person = bool(det_cfg.get('single_person', False))
+        self._selected_bbox = None  # last primary-person bbox (single_person)
 
         track_cfg = cfg.get('tracking', {})
         self.tracking_thr = float(track_cfg.get('thr', 0.3))
         self._track = _track_by_oks if track_cfg.get('use_oks',
                                                      False) else _track_by_iou
 
-        lift_cfg = cfg.get('lifting', {})
         self.norm_pose_2d = bool(lift_cfg.get('norm_pose_2d', True))
         self.rebase_keypoint = bool(lift_cfg.get('rebase_keypoint', True))
 
-        lift_dataset = self.pose_lifter.cfg.test_dataloader.dataset
-        self.seq_len = lift_dataset.get('seq_len', 1)
-        self.seq_step = lift_dataset.get('seq_step', 1)
-        self.causal = lift_dataset.get('causal', False)
         self.pose2d_dataset_name = self.pose_estimator.dataset_meta[
             'dataset_name']
-        self.pose3d_dataset_name = self.pose_lifter.dataset_meta[
-            'dataset_name']
+        if self.lifting_enabled:
+            lift_dataset = self.pose_lifter.cfg.test_dataloader.dataset
+            self.seq_len = lift_dataset.get('seq_len', 1)
+            self.seq_step = lift_dataset.get('seq_step', 1)
+            self.causal = lift_dataset.get('causal', False)
+            self.pose3d_dataset_name = self.pose_lifter.dataset_meta[
+                'dataset_name']
 
         self._history = []  # converted 2D results of the last N frames
         self._results_last = []  # previous frame's 2D results, for tracking
         self._next_id = 0
+
+    def _select_primary(self, bboxes):
+        """Keep only the biggest person, with hysteresis toward the person
+        selected in previous frames so the choice does not flip-flop between
+        two similarly-sized people (which would corrupt the lifter's
+        per-track 2D sequence)."""
+        if len(bboxes) <= 1:
+            if len(bboxes) == 1:
+                self._selected_bbox = bboxes[0]
+            return bboxes
+
+        areas = (bboxes[:, 2] - bboxes[:, 0]) * (bboxes[:, 3] - bboxes[:, 1])
+        best = int(np.argmax(areas))
+        prev = self._selected_bbox
+        if prev is not None:
+            # IoU of each candidate with the previously selected person
+            x1 = np.maximum(bboxes[:, 0], prev[0])
+            y1 = np.maximum(bboxes[:, 1], prev[1])
+            x2 = np.minimum(bboxes[:, 2], prev[2])
+            y2 = np.minimum(bboxes[:, 3], prev[3])
+            inter = np.clip(x2 - x1, 0, None) * np.clip(y2 - y1, 0, None)
+            prev_area = (prev[2] - prev[0]) * (prev[3] - prev[1])
+            ious = inter / (areas + prev_area - inter + 1e-6)
+            cand = int(np.argmax(ious))
+            # stick with the tracked person unless someone is clearly bigger
+            if ious[cand] > 0.3 and areas[cand] >= 0.7 * areas[best]:
+                best = cand
+        self._selected_bbox = bboxes[best]
+        return bboxes[[best]]
 
     def step(self, frame_bgr):
         """Process one frame. Returns (pose_est_results, pose_lift_results)."""
@@ -133,6 +184,9 @@ class Body3DPipeline:
         bboxes = bboxes[np.logical_and(
             pred_instance.labels == self.det_cat_id,
             pred_instance.scores > self.bbox_thr)]
+
+        if self.single_person:
+            bboxes = self._select_primary(bboxes)
 
         pose_est_results = inference_topdown(self.pose_estimator, frame_bgr,
                                              bboxes)
@@ -164,6 +218,8 @@ class Body3DPipeline:
                                                   'pred_instances')
             pose_est_results[i].set_field(track_id, 'track_id')
 
+            if not self.lifting_enabled:
+                continue
             converted_sample = PoseDataSample()
             converted_sample.set_field(
                 pose_est_results[i].pred_instances.clone(), 'pred_instances')
@@ -177,6 +233,9 @@ class Body3DPipeline:
             converted.append(converted_sample)
 
         self._results_last = pose_est_results
+
+        if not self.lifting_enabled:
+            return pose_est_results, []
 
         self._history.append(converted)
         max_history = max(1, self.seq_len * self.seq_step)
@@ -311,12 +370,14 @@ def log_3d(pose_lift_results, skeleton, kpt_thr):
 def run_stream(cap, pipeline, cfg):
     skeleton_2d = pipeline.pose_estimator.dataset_meta.get(
         'skeleton_links') or []
-    skeleton_3d = pipeline.pose_lifter.dataset_meta.get(
-        'skeleton_links') or H36M_SKELETON
     kpt_thr = float(cfg.get('kpt_thr', 0.3))
     jpeg_quality = int(cfg.get('rerun', {}).get('jpeg_quality', 75))
 
-    rr.log('pose3d', rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
+    skeleton_3d = None
+    if pipeline.lifting_enabled:
+        skeleton_3d = pipeline.pose_lifter.dataset_meta.get(
+            'skeleton_links') or H36M_SKELETON
+        rr.log('pose3d', rr.ViewCoordinates.RIGHT_HAND_Z_UP, static=True)
 
     frame_idx = 0
     t0 = time.monotonic()
@@ -332,7 +393,8 @@ def run_stream(cap, pipeline, cfg):
 
         pose2d, pose3d = pipeline.step(frame)
         log_2d(frame, pose2d, skeleton_2d, kpt_thr, jpeg_quality)
-        log_3d(pose3d, skeleton_3d, kpt_thr)
+        if pipeline.lifting_enabled:
+            log_3d(pose3d, skeleton_3d, kpt_thr)
 
         fps_n += 1
         now = time.monotonic()
@@ -348,17 +410,20 @@ def smoke_test(cfg, device):
     pipeline = Body3DPipeline(cfg, device)
     skeleton_2d = pipeline.pose_estimator.dataset_meta.get(
         'skeleton_links') or []
-    skeleton_3d = pipeline.pose_lifter.dataset_meta.get(
-        'skeleton_links') or H36M_SKELETON
+    skeleton_3d = None
+    if pipeline.lifting_enabled:
+        skeleton_3d = pipeline.pose_lifter.dataset_meta.get(
+            'skeleton_links') or H36M_SKELETON
     rng = np.random.default_rng(0)
     for idx in range(3):
         frame = rng.integers(0, 255, (480, 640, 3), dtype=np.uint8)
         rr.set_time_sequence('frame', idx)
         pose2d, pose3d = pipeline.step(frame)
         log_2d(frame, pose2d, skeleton_2d, 0.3, 75)
-        log_3d(pose3d, skeleton_3d, 0.3)
+        if pipeline.lifting_enabled:
+            log_3d(pose3d, skeleton_3d, 0.3)
         print(f'smoke test frame {idx}: {len(pose2d)} detection(s)')
-    print('smoke test OK')
+    print(f'smoke test OK (lifting {"on" if pipeline.lifting_enabled else "off"})')
 
 
 def main():
@@ -375,11 +440,11 @@ def main():
     web_port = int(rerun_cfg.get('web_port', 9090))
     ws_port = int(rerun_cfg.get('ws_port', 9877))
     rr.init(rerun_cfg.get('app_id', 'mmpose_body3d'))
+    views = [rrb.Spatial2DView(origin='video', name='Camera + 2D keypoints')]
+    if cfg.get('lifting', {}).get('enabled', True):
+        views.append(rrb.Spatial3DView(origin='pose3d', name='Lifted 3D pose'))
     blueprint = rrb.Blueprint(
-        rrb.Horizontal(
-            rrb.Spatial2DView(origin='video', name='Camera + 2D keypoints'),
-            rrb.Spatial3DView(origin='pose3d', name='Lifted 3D pose'),
-        ),
+        rrb.Horizontal(*views),
         collapse_panels=True,
     )
     # rerun-sdk 0.18 names this rr.serve(); newer SDKs renamed it serve_web()
