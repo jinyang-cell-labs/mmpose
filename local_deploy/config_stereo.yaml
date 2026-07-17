@@ -1,0 +1,93 @@
+# Configuration for the stereo body-pose deployment (local_deploy/app_stereo.py).
+# Start it with:  STEREO=1 ./local_deploy/bootstrap.sh
+# This file and camera_params/ are bind-mounted into the container by
+# bootstrap.sh, so edits only require a container restart, not a rebuild.
+
+cameras:
+  # The two views of the calibrated rig. cam0 MUST be the camera named
+  # "camera0" in camera_params/ (the world frame of the extrinsics),
+  # cam1 the one named "camera1". Same per-camera options as the mono
+  # config (path, width/height, fourcc, fps).
+  cam0:
+    path: /dev/video0
+    # Capture at the calibration resolution if possible (see
+    # camera_params/intrinsics.yaml). Other resolutions work too: the
+    # intrinsics are rescaled automatically, but the aspect ratio should
+    # match the calibrated one.
+    width: 1280
+    height: 720
+    fourcc: MJPG
+    fps: 30
+  cam1:
+    path: /dev/video2
+    width: 1280
+    height: 720
+    fourcc: MJPG
+    fps: 30
+
+calibration:
+  intrinsics: local_deploy/camera_params/intrinsics.yaml
+  extrinsics: local_deploy/camera_params/extrinsics.yaml
+
+# 'auto' picks cuda:0 when available, otherwise cpu. Force with 'cpu'/'cuda:0'.
+device: auto
+
+models:
+  # Person detector (mmdet)
+  det_config: demo/mmdetection_cfg/rtmdet_m_640-8xb32_coco-person.py
+  det_checkpoint: https://download.openmmlab.com/mmpose/v1/projects/rtmpose/rtmdet_m_8xb32-100e_coco-obj365-person-235e8209.pth
+  # 2D top-down body pose estimator (17 COCO keypoints), run on both views.
+  # No pose lifter here: the 3D pose comes from triangulation.
+  pose2d_config: configs/body_2d_keypoint/rtmpose/body8/rtmpose-m_8xb256-420e_body8-256x192.py
+  pose2d_checkpoint: https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/rtmpose-m_simcc-body7_pt-body7_420e-256x192-e48f03d0_20230504.pth
+
+detection:
+  cat_id: 0        # 'person' class id in COCO
+  bbox_thr: 0.5    # min detection score for a person box
+  # Always treated as true in the stereo pipeline: cross-view matching is
+  # done by triangulating the primary (biggest, sticky) person of each view.
+  single_person: true
+
+tracking:
+  use_oks: false   # false = IoU-based tracking, true = OKS-based
+  thr: 0.3
+
+triangulation:
+  # A keypoint is triangulated only when its 2D score reaches this value in
+  # BOTH views (the DLT is additionally confidence-weighted). Slightly
+  # stricter than the drawing threshold: a bad 2D point in one view is worse
+  # for 3D than a missing one.
+  kpt_thr: 0.35
+
+# Placement of the triangulated skeleton in the 3D view. The triangulated
+# points live in camera0's frame and are remapped to z-up automatically
+# (x right, depth away from camera0 = +y, up = +z); this yaw/translation is
+# applied on top, e.g. to rotate the person to face the robot or to put the
+# floor at z=0 (the absolute height depends on where camera0 is mounted).
+viz:
+  yaw_deg: 0
+  translation: [0.0, 0.0, 0.0]
+
+kpt_thr: 0.3       # min keypoint score to draw (2D overlays and 3D view)
+
+robot:
+  # Retarget the triangulated COCO-17 pose to the humanoid's arms
+  # (retarget_coco.py) and show the robot in the 3D view, plus joint-angle
+  # time series.
+  enabled: true
+  urdf: robot_model/robot.urdf
+  # Placement in the 3D view [x, y, z], next to the human skeleton.
+  offset: [0.0, -0.9, 0.95]
+  yaw_deg: 0        # rotate the robot about vertical
+  # EMA smoothing for joint angles: 1 = raw (jittery), lower = smoother
+  smoothing: 0.35
+  # The stereo rig sees the real (non-mirrored) world, so the robot's left
+  # arm follows your left arm by default. Set true to swap sides.
+  mirror: false
+
+rerun:
+  app_id: mmpose_stereo
+  web_port: 9090   # Rerun web viewer (HTTP); bootstrap.sh reads these
+  ws_port: 9877    # Rerun data websocket
+  jpeg_quality: 75 # compression for the streamed video frames
+  memory_limit: 1GB

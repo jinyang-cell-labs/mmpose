@@ -8,13 +8,30 @@ and visualize it in the [Rerun](https://rerun.io) viewer in your browser:
 - **3D view** — the lifted 3D pose (2D → 3D pose lifting), rendered as an
   interactive 3D skeleton you can orbit/zoom.
 
-Pipeline (all monocular, single camera):
+Two pipelines share the same image and code base
+(`local_deploy/core/` holds the shared stages):
+
+**Mono** (default, `app.py` / `config.yaml`) — single camera, 3D by
+2D→3D lifting (root-relative, not metric):
 
 ```
 /dev/video0 ─> RTMDet-m (person detection)
             ─> RTMPose-m (2D keypoints, COCO-17)
             ─> VideoPose3D (2D→3D lifting, H36M-17)
             ─> Rerun web viewer (2D overlay + 3D plot)
+```
+
+**Stereo** (`app_stereo.py` / `config_stereo.yaml`) — two calibrated
+cameras, metric 3D by triangulation (see
+[Stereo pipeline](#stereo-pipeline-metric-3d-from-two-cameras)):
+
+```
+/dev/video0 ─┐
+             ├─> RTMDet-m + RTMPose-m (per camera, shared models)
+/dev/video2 ─┘
+             ─> triangulation (calibration in camera_params/)
+             ─> metric 3D skeleton (COCO-17) ─> arm retargeting
+             ─> Rerun web viewer (2 camera views + 3D plot)
 ```
 
 ## Prerequisites
@@ -96,14 +113,61 @@ image. E.g. for MotionBERT (better 3D quality, heavier), set:
   pose3d_checkpoint: https://download.openmmlab.com/mmpose/v1/body_3d_keypoint/pose_lift/h36m/motionbert_ft_h36m-d80af323_20230531.pth
 ```
 
+## Stereo pipeline (metric 3D from two cameras)
+
+```bash
+STEREO=1 ./local_deploy/bootstrap.sh
+```
+
+This runs `app_stereo.py` with [`config_stereo.yaml`](config_stereo.yaml):
+both cameras are passed through, the per-view 2D keypoints are triangulated
+with the calibration in [`camera_params/`](camera_params/), and the viewer
+shows both camera streams, the metric 3D skeleton, the camera frustums and
+the retargeted robot.
+
+Key differences from the mono pipeline:
+
+- **Metric & absolute 3D.** Triangulation recovers true positions in the
+  calibrated world frame (= `camera0`, remapped to z-up for display), so
+  there is no root-relative/`rebase_keypoint` approximation.
+- **COCO-17 end to end.** No pose lifter and no H36M conversion; the
+  triangulated skeleton stays in the COCO format and is retargeted by
+  [`retarget_coco.py`](retarget_coco.py) (pelvis/thorax derived as
+  hip/shoulder midpoints; right-handed frame, unlike the mirrored display
+  frame the mono `retarget.py` compensates for). Self-test:
+  `python local_deploy/retarget_coco.py`.
+- **Single person.** Cross-view matching uses the primary (biggest, sticky)
+  person of each view; `detection.single_person` is forced on.
+- **Both frames are `grab()`bed back-to-back** before decoding, bounding the
+  view skew to a few ms without hardware sync.
+- Expect roughly half the FPS of mono: the 2D stage runs twice per frame
+  pair on the same GPU.
+
+Stereo-specific configuration (`config_stereo.yaml`):
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `cameras.cam0` / `cameras.cam1` | `/dev/video0` / `/dev/video2` | Per-view capture settings (same options as mono `camera.*`). `cam0`/`cam1` must be the rig's `camera0`/`camera1` from the calibration files. |
+| `calibration.intrinsics` / `.extrinsics` | `camera_params/*.yaml` | Pinhole + radtan intrinsics per camera; `T_world_cam` extrinsics (world = `camera0`). Capture at the calibration resolution if possible — other resolutions are handled by rescaling the intrinsics. |
+| `triangulation.kpt_thr` | 0.35 | A keypoint is triangulated only if its 2D score reaches this in **both** views (the DLT is also confidence-weighted; points behind a camera are rejected). |
+| `viz.yaw_deg` / `viz.translation` | 0 / `[0,0,0]` | Extra transform applied to the z-up display frame, e.g. to put the floor at z = 0 (depends on the height of `camera0`). |
+| `robot.mirror` | false | The stereo rig sees the non-mirrored world, so the robot follows the correct side by default. |
+
+The geometry self-tests (undistort → weighted-DLT round-trip, COCO
+retargeter) run as part of `--smoke-test`, or standalone:
+`python local_deploy/core/triangulation.py`.
+
 ## Validating the image without a camera
 
 ```bash
 docker run --rm mmpose-body3d-rerun:latest \
     python local_deploy/app.py --config local_deploy/config.yaml --smoke-test
+docker run --rm mmpose-body3d-rerun:latest \
+    python local_deploy/app_stereo.py --config local_deploy/config_stereo.yaml --smoke-test
 ```
 
-This runs the full detector → 2D → 3D pipeline on synthetic frames and exits.
+This runs the full detector → 2D → 3D pipeline (lifting resp. triangulation)
+on synthetic frames and exits.
 
 ## Robot arm retargeting
 
@@ -124,10 +188,10 @@ degrees from the human pose.
 
 ## Notes & troubleshooting
 
-- **The 3D pose is root-relative.** Monocular lifting cannot recover absolute
-  metric position; the skeleton is centered at the pelvis and (by default)
-  rebased so the lowest joint touches z = 0. For true metric 3D you'd need
-  multi-camera triangulation of the 2D keypoints.
+- **The mono 3D pose is root-relative.** Monocular lifting cannot recover
+  absolute metric position; the skeleton is centered at the pelvis and (by
+  default) rebased so the lowest joint touches z = 0. For true metric 3D use
+  the stereo pipeline (`STEREO=1`, see above).
 - **Latency/quality trade-off:** the VideoPose3D lifter uses a 243-frame
   temporal window. In this live setup the newest frame is the target and the
   future half of the window is padded, so the 3D pose can lag or wobble
